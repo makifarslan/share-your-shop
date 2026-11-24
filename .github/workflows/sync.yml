@@ -1,0 +1,86 @@
+name: Sync shops from Discord
+
+on:
+  schedule:
+    # Every hour, a quarter past (the top of the hour is GitHub's busiest moment).
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build and deploy even if nothing changed
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - config.json
+      - sync.py
+      - requirements.txt
+      - .github/workflows/sync.yml
+
+# One run at a time: a new one waits for the last deploy to finish.
+concurrency:
+  group: share-your-shop
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # only for the keep-alive commit at the end
+    outputs:
+      changed: ${{ steps.sync.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pillow
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet --disable-pip-version-check -r requirements.txt
+
+      - name: Tests
+        run: .venv/bin/python -m unittest discover -s tests
+
+      - name: Read Discord and build the site
+        id: sync
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          # A change to the settings or the script always deploys; so does a manual run with "force".
+          FORCE: ${{ github.event_name == 'push' || inputs.force }}
+        run: |
+          export PAGES_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          .venv/bin/python sync.py --out site
+
+      - name: Upload the site
+        if: steps.sync.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      # GitHub stops the schedule of a public repository after 60 days without a
+      # commit. An empty commit every 45 quiet days keeps it running.
+      - name: Keep the hourly schedule alive
+        if: github.event_name == 'schedule'
+        run: |
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt $(( 45 * 86400 )) ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Keep the hourly sync alive"
+            git push
+          fi
+
+  deploy:
+    needs: sync
+    if: needs.sync.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

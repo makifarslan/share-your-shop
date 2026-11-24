@@ -1,0 +1,21 @@
+{
+  "_help": "What each setting does: README.md. After a change the site is rebuilt in a minute or two.",
+  "enabled": true,
+  "channel_name": "share-your-shop",
+  "channel_id": "",
+  "guild_id": "",
+  "approve_emoji": ["✅"],
+  "approver_role_ids": [],
+  "approver_user_ids": [],
+  "blocked_user_ids": [],
+  "blocked_message_ids": [],
+  "max_messages": 3000,
+  "max_images": 40,
+  "max_per_author": 3,
+  "min_width": 640,
+  "min_height": 360,
+  "image_width": 1280,
+  "image_height": 720,
+  "jpeg_quality": 82,
+  "rotate_seconds": 8
+}
