@@ -1,5 +1,6 @@
 """Tests for sync.py against a fake Discord. Run: python -m unittest discover -s tests"""
 
+import contextlib
 import io
 import json
 import os
@@ -164,7 +165,8 @@ def config(**changes):
 class ChooseTests(unittest.TestCase):
     def run_choose(self, web, cfg):
         dc = sync.Discord("TOKEN", web, sleep=lambda s: None)
-        channel, guild = sync.find_channel(dc, cfg)
+        with contextlib.redirect_stdout(io.StringIO()):
+            channel, guild = sync.find_channel(dc, cfg)
         approvers = sync.Approvers(dc, guild, cfg)
         return sync.choose_items(sync.read_posts(dc, channel, guild, cfg), dc, approvers, cfg)
 
@@ -250,7 +252,9 @@ class SiteTests(unittest.TestCase):
 
     def run_main(self, web, *extra, maker=fake_picture):
         open(self.output, "w").close()
-        code = sync.main(["--config", self.cfg_path, "--out", self.out, "--pages-url", PAGES, *extra], web, maker)
+        # Kept out of the log: GitHub reads "::warning::" lines as notes on the run.
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = sync.main(["--config", self.cfg_path, "--out", self.out, "--pages-url", PAGES, *extra], web, maker)
         with open(self.output) as f:
             return code, f.read().strip()
 
@@ -279,7 +283,8 @@ class SiteTests(unittest.TestCase):
         for entry in manifest["items"]:
             with open(os.path.join(self.out, entry["image"]), "rb") as f:
                 self.assertTrue(f.read().startswith(sync.JPEG_MAGIC))
-        self.assertIn("@alice", open(os.path.join(self.out, "index.html"), encoding="utf-8").read())
+        with open(os.path.join(self.out, "index.html"), encoding="utf-8") as f:
+            self.assertIn("@alice", f.read())
 
         # Live now. The same channel next hour: nothing to deploy.
         self.publish(web)
