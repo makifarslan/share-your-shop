@@ -75,8 +75,13 @@ class FakeWeb:
         if path == "/users/@me/guilds":
             return self.ok([{"id": GUILD}])
         if path == f"/guilds/{GUILD}/channels":
+            # Servers decorate names: an emoji and a dot in front.
+            decorated = chr(0x1F3A8) + chr(0x30FB) + "share-your-shop"
             return self.ok([{"id": "3", "name": "general", "type": 0},
-                            {"id": CHANNEL, "name": "share-your-shop", "type": self.channel_type}])
+                            {"id": "4", "name": "share-your-shop-rules", "type": 0},
+                            {"id": CHANNEL, "name": decorated, "type": self.channel_type}])
+        if path == f"/channels/{CHANNEL}":
+            return self.ok({"id": CHANNEL, "guild_id": GUILD, "name": "share-your-shop", "type": self.channel_type})
         if path == f"/guilds/{GUILD}":
             return self.ok({"owner_id": OWNER, "roles": [
                 {"id": GUILD, "permissions": str(1 << 10)},
@@ -198,6 +203,12 @@ class ChooseTests(unittest.TestCase):
         web = FakeWeb(sample_messages(), channel_type=15)
         items, _ = self.run_choose(web, config())
         self.assertEqual([i.attachment_id for i in items], ["5001", "5002", "5004", "5009", "5011"])
+
+    def test_channel_by_id(self):
+        web = FakeWeb(sample_messages())
+        items, _ = self.run_choose(web, config(channel_id=CHANNEL, channel_name="anything"))
+        self.assertEqual(len(items), 5)
+        self.assertFalse([u for u in web.calls if u.endswith("/users/@me/guilds")])
 
     def test_role_listed_in_config_can_approve(self):
         web = FakeWeb([message("50", user(BOB, "bob"), [picture("7000")], [FAN])])

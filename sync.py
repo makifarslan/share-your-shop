@@ -215,6 +215,12 @@ def post_from_message(message: dict, channel_id: str) -> Post:
     )
 
 
+def plain_channel_name(name: str) -> str:
+    """'🎨・share-your-shop' -> 'share-your-shop': servers often decorate channel names."""
+    kept = "".join(c for c in name.lower() if c.isascii() and (c.isalnum() or c in "-_"))
+    return kept.strip("-_")
+
+
 def find_channel(dc: Discord, cfg: Config) -> tuple:
     """The channel to read and its server, by id or else by name."""
     if cfg.channel_id:
@@ -225,9 +231,12 @@ def find_channel(dc: Discord, cfg: Config) -> tuple:
     if not guild_ids:
         raise SystemExit("The bot is not in any Discord server yet. Add it with its invite link.")
 
+    wanted = plain_channel_name(cfg.channel_name)
     for guild_id in guild_ids:
         for channel in dc.get(f"/guilds/{guild_id}/channels") or []:
-            if channel.get("name") == cfg.channel_name and channel.get("type") in TEXT_CHANNEL_TYPES + THREAD_CHANNEL_TYPES:
+            if channel.get("type") not in TEXT_CHANNEL_TYPES + THREAD_CHANNEL_TYPES:
+                continue
+            if plain_channel_name(str(channel.get("name") or "")) == wanted:
                 print(f"Found #{cfg.channel_name}: channel {channel['id']} in server {guild_id}.")
                 return channel, guild_id
 
